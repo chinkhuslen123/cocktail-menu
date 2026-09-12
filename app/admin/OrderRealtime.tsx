@@ -759,13 +759,21 @@ export default function OrderRealtime() {
 
               <button
                 type="button"
+                disabled={checkoutLoading}
                 onClick={async () => {
+                  if (checkoutLoading) {
+                    return;
+                  }
+                  setCheckoutLoading(true);
                   await checkoutTable(selectedTable.tableNumber);
                   setShowCheckoutConfirm(false);
+                  setCheckoutLoading(false);
                 }}
-                className="rounded-xl bg-emerald-500 px-4 py-3 text-sm font-bold text-white transition hover:bg-emerald-400"
+                className="rounded-xl bg-emerald-500 px-4 py-3 text-sm font-bold text-white transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Тийм, тооцоо хаах
+                {checkoutLoading
+                  ? "Хаагдаж байна..."
+                  : "Тийм, тооцоо хаах"}
               </button>
             </div>
           </div>
