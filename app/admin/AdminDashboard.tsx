@@ -318,7 +318,9 @@ export default function AdminDashboard({
 
           <section
             className={
-              mainView === "orders" ? "block" : "hidden"
+              mainView === "orders"
+                ? ""
+                : "tab-pane-hidden"
             }
           >
 
@@ -335,6 +337,14 @@ export default function AdminDashboard({
             <OrderRealtime />
 
           </section>
+
+          <style jsx>{`
+            @media screen {
+              .tab-pane-hidden {
+                display: none;
+              }
+            }
+          `}</style>
 
 
           {/* ================================================= */}
