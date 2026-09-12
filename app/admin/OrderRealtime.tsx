@@ -246,6 +246,10 @@ export default function OrderRealtime() {
   }
 
   async function checkoutTable(tableNumber: number) {
+    // Хаахаас өмнөх барааны жагсаалт/дүнгийн snapshot-ийг авч үлдэнэ,
+    // учир нь checkout амжилттай болмогц selectedTable цэвэрлэгдэнэ.
+    const billSnapshot = selectedTable;
+
     try {
       const response = await fetch("/api/checkout", {
         method: "POST",
@@ -279,7 +283,12 @@ export default function OrderRealtime() {
 
       setSelectedTable(null);
 
-      alert(`Ширээ №${tableNumber}-ийн тооцоо амжилттай хаагдлаа.`);
+      // =========================
+      // AUTO-PRINT: ТООЦОО ХААХ ҮЕД БАРИМТ АВТОМАТААР ХЭВЛЭХ
+      // =========================
+      if (billSnapshot) {
+        setPrintBillGroup(billSnapshot);
+      }
     } catch (error) {
       console.error("CHECKOUT ERROR:", error);
       alert(
