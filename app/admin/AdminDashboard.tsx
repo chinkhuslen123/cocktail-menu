@@ -310,26 +310,31 @@ export default function AdminDashboard({
         <div>
 
           {/* ================================================= */}
-          {/* ORDERS - MAIN SCREEN */}
+          {/* ORDERS - MAIN SCREEN                               */}
+          {/* Realtime сонсогч + автомат хэвлэлт зогсохгүйн тулд  */}
+          {/* энэ хэсгийг ЯМАР ч tab дээр байсан ХАМТЫГ ЛУУС      */}
+          {/* mount хэвээр байлгаж, зөвхөн CSS-ээр нуудаг         */}
           {/* ================================================= */}
 
-          {mainView === "orders" && (
-            <section>
+          <section
+            className={
+              mainView === "orders" ? "block" : "hidden"
+            }
+          >
 
-              <div className="mb-5">
-                <h2 className="text-2xl font-bold text-white">
-                  🧾 Захиалгууд
-                </h2>
+            <div className="mb-5">
+              <h2 className="text-2xl font-bold text-white">
+                🧾 Захиалгууд
+              </h2>
 
-                <p className="mt-1 text-sm text-zinc-500">
-                  Одоогийн идэвхтэй захиалгууд
-                </p>
-              </div>
+              <p className="mt-1 text-sm text-zinc-500">
+                Одоогийн идэвхтэй захиалгууд
+              </p>
+            </div>
 
-              <OrderRealtime />
+            <OrderRealtime />
 
-            </section>
-          )}
+          </section>
 
 
           {/* ================================================= */}
