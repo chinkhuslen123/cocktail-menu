@@ -53,32 +53,16 @@ const [showMyOrders, setShowMyOrders] =
   useState(false);
 
   async function loadMyOrders() {
+    if (!tableNumber) {
+      setMyOrders([]);
+      return;
+    }
+
     setMyOrdersLoading(true);
 
     try {
-      const savedIds = JSON.parse(
-        localStorage.getItem("my_order_ids") || "[]"
-      );
-
-      if (
-        !Array.isArray(savedIds) ||
-        savedIds.length === 0
-      ) {
-        setMyOrders([]);
-        return;
-      }
-
-      const ids = savedIds
-        .map((id: unknown) => Number(id))
-        .filter((id: number) => Number.isInteger(id));
-
-      if (ids.length === 0) {
-        setMyOrders([]);
-        return;
-      }
-
       const response = await fetch(
-        `/api/orders?ids=${ids.join(",")}`,
+        `/api/orders?table_number=${tableNumber}`,
         {
           cache: "no-store",
         }
