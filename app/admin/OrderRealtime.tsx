@@ -371,15 +371,38 @@ export default function OrderRealtime() {
       return;
     }
 
-    const timer = setTimeout(() => {
-      window.print();
+    const itemsHtml = currentPrintOrder.items
+      .map(
+        (item) => `
+          <div class="row">
+            <span>${item.product_name_snapshot}</span>
+            <span>${item.quantity}</span>
+            <span>${formatPrice(Number(item.subtotal))}₮</span>
+          </div>
+        `
+      )
+      .join("");
 
-      setPrintQueue((queue) => queue.slice(1));
-      setCurrentPrintOrder(null);
-      isPrintingRef.current = false;
-    }, 300);
+    printInPopup(`
+      <h1>CLIQUE</h1>
+      <p class="center bold">ШИНЭ ЗАХИАЛГА</p>
+      <p class="center">${formatDate(currentPrintOrder.created_at)}</p>
+      <div class="line"></div>
+      <div class="row"><span>Ширээ</span><span class="bold">№${currentPrintOrder.tableNumber}</span></div>
+      <div class="row"><span>Захиалга</span><span>#${currentPrintOrder.id}</span></div>
+      <div class="line"></div>
+      <div class="row bold"><span>Бүтээгдэхүүн</span><span>Тоо</span><span>Дүн</span></div>
+      <div class="dotted"></div>
+      ${itemsHtml}
+      <div class="line"></div>
+      <div class="row bold"><span>НИЙТ</span><span>${formatPrice(Number(currentPrintOrder.total))}₮</span></div>
+      <div class="line"></div>
+      <p class="center" style="font-size:9px;">Автоматаар хэвлэгдсэн тасалбар</p>
+    `);
 
-    return () => clearTimeout(timer);
+    setPrintQueue((queue) => queue.slice(1));
+    setCurrentPrintOrder(null);
+    isPrintingRef.current = false;
   }, [currentPrintOrder]);
 
   // =========================
@@ -391,12 +414,36 @@ export default function OrderRealtime() {
       return;
     }
 
-    const timer = setTimeout(() => {
-      window.print();
-      setPrintBillGroup(null);
-    }, 300);
+    const itemsHtml = printBillGroup.items
+      .map(
+        (item, index) => `
+          <div class="row" key="${index}">
+            <span>${item.product_name_snapshot}</span>
+            <span>${item.quantity}</span>
+            <span>${formatPrice(item.subtotal)}₮</span>
+          </div>
+        `
+      )
+      .join("");
 
-    return () => clearTimeout(timer);
+    printInPopup(`
+      <h1>CLIQUE</h1>
+      <p class="center bold">ТООЦООНЫ БАРИМТ</p>
+      <p class="center">${formatDate(printBillGroup.latestOrderTime)}</p>
+      <div class="line"></div>
+      <div class="row"><span>Ширээ</span><span class="bold">№${printBillGroup.tableNumber}</span></div>
+      <div class="row"><span>Захиалгын тоо</span><span>${printBillGroup.orders.length}</span></div>
+      <div class="line"></div>
+      <div class="row bold"><span>Бүтээгдэхүүн</span><span>Тоо</span><span>Дүн</span></div>
+      <div class="dotted"></div>
+      ${itemsHtml}
+      <div class="line"></div>
+      <div class="row bold"><span>НИЙТ ТӨЛӨХ</span><span>${formatPrice(printBillGroup.total)}₮</span></div>
+      <div class="line"></div>
+      <p class="center" style="font-size:9px;">Баярлалаа!</p>
+    `);
+
+    setPrintBillGroup(null);
   }, [printBillGroup]);
 
   // =========================
@@ -469,6 +516,91 @@ export default function OrderRealtime() {
       dateStyle: "short",
       timeStyle: "short",
     });
+  }
+
+  // =========================
+  // PRINT VIA POPUP (үндсэн хуудсыг блоклохгүйн тулд)
+  // =========================
+
+  function printInPopup(bodyHtml: string) {
+    const printWindow = window.open(
+      "",
+      "_blank",
+      "width=380,height=600"
+    );
+
+    if (!printWindow) {
+      console.error(
+        "PRINT POPUP BLOCKED: browser popup blocker-т хориглогдсон байж магадгүй."
+      );
+      return;
+    }
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Тасалбар</title>
+          <style>
+            * { box-sizing: border-box; }
+            body {
+              font-family: Arial, Helvetica, sans-serif;
+              width: 80mm;
+              margin: 0;
+              padding: 4mm;
+              color: #000;
+            }
+            .row {
+              display: flex;
+              justify-content: space-between;
+              gap: 8px;
+              font-size: 11px;
+              margin: 2px 0;
+            }
+            .line {
+              border-top: 1px solid #000;
+              margin: 8px 0;
+            }
+            .dotted {
+              border-top: 1px dotted #000;
+              margin: 6px 0;
+            }
+            h1 {
+              font-size: 16px;
+              text-align: center;
+              margin: 0;
+            }
+            .center {
+              text-align: center;
+            }
+            .bold {
+              font-weight: bold;
+            }
+            @page {
+              size: 80mm auto;
+              margin: 0;
+            }
+          </style>
+        </head>
+        <body>
+          ${bodyHtml}
+        </body>
+      </html>
+    `);
+
+    printWindow.document.close();
+    printWindow.focus();
+
+    // Хэвлэх dialog-г нээгээд, хаагдмагц (хэвлэсэн ч,
+    // цуцалсан ч) popup-ыг өөрөө хаана — үндсэн хуудас
+    // энэ хугацаанд ЗОГСОХГҮЙ, дараагийн захиалгыг
+    // боловсруулсаар байна.
+    printWindow.onafterprint = () => {
+      printWindow.close();
+    };
+
+    setTimeout(() => {
+      printWindow.print();
+    }, 250);
   }
 
   // =========================
@@ -780,241 +912,6 @@ export default function OrderRealtime() {
         </div>
       )}
 
-      {/* ==================================================
-          AUTO-PRINT: NEW ORDER TICKET (80mm, зөвхөн хэвлэхэд харагдана)
-      ================================================== */}
-      {currentPrintOrder && (
-        <div id="order-ticket-receipt" className="hidden">
-          <div className="text-center">
-            <h3 className="text-lg font-bold tracking-wide">CLIQUE</h3>
-            <p className="mt-1 text-sm font-semibold">ШИНЭ ЗАХИАЛГА</p>
-            <p className="mt-2 text-xs">
-              {formatDate(currentPrintOrder.created_at)}
-            </p>
-          </div>
-
-          <div className="my-3 border-t border-black" />
-
-          <div className="space-y-1 text-xs">
-            <div className="flex justify-between gap-3">
-              <span>Ширээ</span>
-              <span className="font-bold">
-                №{currentPrintOrder.tableNumber}
-              </span>
-            </div>
-            <div className="flex justify-between gap-3">
-              <span>Захиалга</span>
-              <span>#{currentPrintOrder.id}</span>
-            </div>
-          </div>
-
-          <div className="my-3 border-t border-black" />
-
-          <div className="grid grid-cols-[1fr_35px_75px] gap-2 text-[11px] font-bold">
-            <span>Бүтээгдэхүүн</span>
-            <span className="text-center">Тоо</span>
-            <span className="text-right">Дүн</span>
-          </div>
-
-          <div className="my-2 border-t border-dotted border-black" />
-
-          <div className="space-y-2">
-            {currentPrintOrder.items.map((item) => (
-              <div
-                key={item.id}
-                className="grid grid-cols-[1fr_35px_75px] gap-2 text-[11px]"
-              >
-                <span className="break-words">
-                  {item.product_name_snapshot}
-                </span>
-                <span className="text-center">{item.quantity}</span>
-                <span className="text-right">
-                  {formatPrice(Number(item.subtotal))}₮
-                </span>
-              </div>
-            ))}
-          </div>
-
-          <div className="my-3 border-t border-black" />
-
-          <div className="flex justify-between text-sm font-bold">
-            <span>НИЙТ</span>
-            <span>{formatPrice(Number(currentPrintOrder.total))}₮</span>
-          </div>
-
-          <div className="my-3 border-t border-black" />
-
-          <p className="text-center text-[9px]">
-            Автоматаар хэвлэгдсэн тасалбар
-          </p>
-        </div>
-      )}
-
-      <style jsx global>{`
-        @media print {
-          @page {
-            size: 80mm auto;
-            margin: 0;
-          }
-
-          html,
-          body {
-            width: 80mm !important;
-            margin: 0 !important;
-            padding: 0 !important;
-            background: white !important;
-          }
-
-          body * {
-            visibility: hidden !important;
-          }
-
-          #order-ticket-receipt,
-          #order-ticket-receipt * {
-            visibility: visible !important;
-          }
-
-          #order-ticket-receipt {
-            display: block !important;
-            position: absolute !important;
-            left: 0 !important;
-            top: 0 !important;
-
-            width: 80mm !important;
-            min-width: 80mm !important;
-            max-width: 80mm !important;
-
-            margin: 0 !important;
-            padding: 4mm !important;
-
-            background: white !important;
-            color: black !important;
-
-            font-family: Arial, Helvetica, sans-serif !important;
-          }
-
-          button {
-            display: none !important;
-          }
-        }
-      `}</style>
-
-      {/* ==================================================
-          AUTO-PRINT: TABLE BILL (ширээг хаалгүйгээр зөвхөн хэвлэх)
-      ================================================== */}
-      {printBillGroup && (
-        <div id="table-bill-receipt" className="hidden">
-          <div className="text-center">
-            <h3 className="text-lg font-bold tracking-wide">CLIQUE</h3>
-            <p className="mt-1 text-sm font-semibold">ТООЦООНЫ БАРИМТ</p>
-            <p className="mt-2 text-xs">
-              {formatDate(printBillGroup.latestOrderTime)}
-            </p>
-          </div>
-
-          <div className="my-3 border-t border-black" />
-
-          <div className="text-xs">
-            <div className="flex justify-between gap-3">
-              <span>Ширээ</span>
-              <span className="font-bold">
-                №{printBillGroup.tableNumber}
-              </span>
-            </div>
-            <div className="flex justify-between gap-3">
-              <span>Захиалгын тоо</span>
-              <span>{printBillGroup.orders.length}</span>
-            </div>
-          </div>
-
-          <div className="my-3 border-t border-black" />
-
-          <div className="grid grid-cols-[1fr_35px_75px] gap-2 text-[11px] font-bold">
-            <span>Бүтээгдэхүүн</span>
-            <span className="text-center">Тоо</span>
-            <span className="text-right">Дүн</span>
-          </div>
-
-          <div className="my-2 border-t border-dotted border-black" />
-
-          <div className="space-y-2">
-            {printBillGroup.items.map((item, index) => (
-              <div
-                key={`${item.product_id}-${index}`}
-                className="grid grid-cols-[1fr_35px_75px] gap-2 text-[11px]"
-              >
-                <span className="break-words">
-                  {item.product_name_snapshot}
-                </span>
-                <span className="text-center">{item.quantity}</span>
-                <span className="text-right">
-                  {formatPrice(item.subtotal)}₮
-                </span>
-              </div>
-            ))}
-          </div>
-
-          <div className="my-3 border-t border-black" />
-
-          <div className="flex justify-between text-sm font-bold">
-            <span>НИЙТ ТӨЛӨХ</span>
-            <span>{formatPrice(printBillGroup.total)}₮</span>
-          </div>
-
-          <div className="my-3 border-t border-black" />
-
-          <p className="text-center text-[9px]">Баярлалаа!</p>
-        </div>
-      )}
-
-      <style jsx global>{`
-        @media print {
-          @page {
-            size: 80mm auto;
-            margin: 0;
-          }
-
-          html,
-          body {
-            width: 80mm !important;
-            margin: 0 !important;
-            padding: 0 !important;
-            background: white !important;
-          }
-
-          body * {
-            visibility: hidden !important;
-          }
-
-          #table-bill-receipt,
-          #table-bill-receipt * {
-            visibility: visible !important;
-          }
-
-          #table-bill-receipt {
-            display: block !important;
-            position: absolute !important;
-            left: 0 !important;
-            top: 0 !important;
-
-            width: 80mm !important;
-            min-width: 80mm !important;
-            max-width: 80mm !important;
-
-            margin: 0 !important;
-            padding: 4mm !important;
-
-            background: white !important;
-            color: black !important;
-
-            font-family: Arial, Helvetica, sans-serif !important;
-          }
-
-          button {
-            display: none !important;
-          }
-        }
-      `}</style>
     </section>
   );
 }

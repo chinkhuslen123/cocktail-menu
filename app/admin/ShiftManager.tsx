@@ -233,19 +233,15 @@ export default function ShiftManager() {
   }
 
   // Хаагдсаны дараа гарч ирэх тайланг DOM-д зурагдмагц
-  // нэг л удаа автоматаар хэвлэнэ
+  // нэг л удаа автоматаар, popup цонхон дээр хэвлэнэ
+  // (үндсэн хуудсыг блоклохгүйн тулд)
   useEffect(() => {
     if (
       receiptData?.auto &&
       !autoPrintedRef.current
     ) {
       autoPrintedRef.current = true;
-
-      const timer = setTimeout(() => {
-        window.print();
-      }, 300);
-
-      return () => clearTimeout(timer);
+      printInPopup(buildReceiptHtml(receiptData));
     }
   }, [receiptData]);
 
@@ -284,8 +280,122 @@ export default function ShiftManager() {
     ).format(amount);
   }
 
+  // =========================
+  // PRINT VIA POPUP (үндсэн хуудсыг блоклохгүйн тулд)
+  // =========================
+
+  function printInPopup(bodyHtml: string) {
+    const printWindow = window.open(
+      "",
+      "_blank",
+      "width=380,height=600"
+    );
+
+    if (!printWindow) {
+      console.error(
+        "PRINT POPUP BLOCKED: browser popup blocker-т хориглогдсон байж магадгүй."
+      );
+      return;
+    }
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Ээлжийн тайлан</title>
+          <style>
+            * { box-sizing: border-box; }
+            body {
+              font-family: Arial, Helvetica, sans-serif;
+              width: 80mm;
+              margin: 0;
+              padding: 4mm;
+              color: #000;
+            }
+            .row {
+              display: flex;
+              justify-content: space-between;
+              gap: 8px;
+              font-size: 11px;
+              margin: 2px 0;
+            }
+            .line { border-top: 1px solid #000; margin: 8px 0; }
+            .dotted { border-top: 1px dotted #000; margin: 6px 0; }
+            h1 { font-size: 16px; text-align: center; margin: 0; }
+            .center { text-align: center; }
+            .bold { font-weight: bold; }
+            @page { size: 80mm auto; margin: 0; }
+          </style>
+        </head>
+        <body>${bodyHtml}</body>
+      </html>
+    `);
+
+    printWindow.document.close();
+    printWindow.focus();
+
+    printWindow.onafterprint = () => {
+      printWindow.close();
+    };
+
+    setTimeout(() => {
+      printWindow.print();
+    }, 250);
+  }
+
+  function buildReceiptHtml(data: ReceiptData) {
+    const itemsHtml =
+      data.products.length === 0
+        ? `<p class="center" style="font-size:11px;">Бүтээгдэхүүний мэдээлэл алга</p>`
+        : data.products
+            .map(
+              (product) => `
+                <div class="row">
+                  <span>${product.name}</span>
+                  <span>${product.quantity}</span>
+                  <span>${formatMoney(product.total)}₮</span>
+                </div>
+              `
+            )
+            .join("");
+
+    const title = data.shift.is_open
+      ? "ОДООГИЙН ЭЭЛЖИЙН ТАЙЛАН"
+      : "БОРЛУУЛАЛТЫН ТАЙЛАН";
+
+    const closedRow =
+      data.shift.is_open || !data.shift.closed_at
+        ? "Идэвхтэй байна"
+        : formatDate(data.shift.closed_at);
+
+    return `
+      <h1>CLIQUE</h1>
+      <p class="center bold">${title}</p>
+      <p class="center" style="font-size:11px;">${formatReceiptDate(data.shift.opened_at)}</p>
+      <p class="center" style="font-size:11px;">Ээлж #${data.shift.id}</p>
+      <div class="line"></div>
+      <div class="row"><span>Ээлж эхэлсэн</span><span>${formatDate(data.shift.opened_at)}</span></div>
+      <div class="row"><span>Ээлж хаасан</span><span>${closedRow}</span></div>
+      <div class="line"></div>
+      <div class="row bold"><span>Бүтээгдэхүүн</span><span>Тоо</span><span>Дүн</span></div>
+      <div class="dotted"></div>
+      ${itemsHtml}
+      <div class="line"></div>
+      <div class="row"><span>Нийт захиалга</span><span class="bold">${data.summary.orderCount}</span></div>
+      <div class="row bold" style="font-size:14px;"><span>НИЙТ</span><span>${formatMoney(data.summary.total)}₮</span></div>
+      <div class="line"></div>
+      <p class="center" style="font-size:9px;">${
+        data.shift.is_open
+          ? "Идэвхтэй ээлжийн явцын тайлан"
+          : "Ээлжийн хаалтын тайлан"
+      }</p>
+    `;
+  }
+
   function printReceipt() {
-    window.print();
+    if (!receiptData) {
+      return;
+    }
+    printInPopup(buildReceiptHtml(receiptData));
   }
 
   if (loading) {
@@ -630,63 +740,6 @@ export default function ShiftManager() {
           </div>
         </div>
       )}
-
-      {/* PRINT CSS */}
-
-      <style jsx global>{`
-        @media print {
-          @page {
-            size: 88mm auto;
-            margin: 0;
-          }
-
-          html,
-          body {
-            width: 88mm !important;
-            margin: 0 !important;
-            padding: 0 !important;
-            background: white !important;
-          }
-
-          body * {
-            visibility: hidden !important;
-          }
-
-          #current-shift-receipt,
-          #current-shift-receipt * {
-            visibility: visible !important;
-          }
-
-          #current-shift-receipt {
-            display: block !important;
-            position: absolute !important;
-            left: 0 !important;
-            top: 0 !important;
-
-            width: 88mm !important;
-            min-width: 88mm !important;
-            max-width: 88mm !important;
-
-            margin: 0 !important;
-            padding: 5mm !important;
-
-            overflow: visible !important;
-
-            background: white !important;
-            color: black !important;
-
-            box-shadow: none !important;
-          }
-
-          .current-shift-receipt-print {
-            font-family: Arial, Helvetica, sans-serif !important;
-          }
-
-          button {
-            display: none !important;
-          }
-        }
-      `}</style>
     </>
   );
 }
