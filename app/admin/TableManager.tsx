@@ -10,12 +10,40 @@ type Table = {
   created_at: string;
 };
 
+type Category = {
+  id: number;
+  name: string;
+  sort_order: number;
+  created_at: string;
+};
+
+type Product = {
+  id: number;
+  name: string;
+  description: string | null;
+  category_id: number;
+  image_url: string | null;
+  ingredients: string | null;
+  price: number;
+  is_available: boolean;
+  sort_order: number;
+};
+
+type CartLine = {
+  product: Product;
+  quantity: number;
+};
+
 type TableManagerProps = {
   tables: Table[];
+  products: Product[];
+  categories: Category[];
 };
 
 export default function TableManager({
   tables,
+  products,
+  categories,
 }: TableManagerProps) {
   const router = useRouter();
 
@@ -27,6 +55,134 @@ export default function TableManager({
   const [error, setError] = useState("");
 
   const [qrTable, setQrTable] = useState<Table | null>(null);
+
+  // =========================
+  // АДМИНААС ЗАХИАЛГА ӨГӨХ
+  // =========================
+
+  const [orderTable, setOrderTable] = useState<Table | null>(
+    null
+  );
+  const [activeCategoryId, setActiveCategoryId] = useState<
+    number | null
+  >(categories[0]?.id ?? null);
+  const [cart, setCart] = useState<CartLine[]>([]);
+  const [placingOrder, setPlacingOrder] = useState(false);
+  const [orderError, setOrderError] = useState("");
+  const [orderSuccess, setOrderSuccess] = useState(false);
+
+  function openOrderForm(table: Table) {
+    setOrderTable(table);
+    setCart([]);
+    setOrderError("");
+    setOrderSuccess(false);
+    setActiveCategoryId(categories[0]?.id ?? null);
+  }
+
+  function closeOrderForm() {
+    setOrderTable(null);
+    setCart([]);
+    setOrderError("");
+    setOrderSuccess(false);
+  }
+
+  function addToCart(product: Product) {
+    setCart((current) => {
+      const existing = current.find(
+        (line) => line.product.id === product.id
+      );
+
+      if (existing) {
+        return current.map((line) =>
+          line.product.id === product.id
+            ? { ...line, quantity: line.quantity + 1 }
+            : line
+        );
+      }
+
+      return [...current, { product, quantity: 1 }];
+    });
+  }
+
+  function changeQuantity(productId: number, delta: number) {
+    setCart((current) =>
+      current
+        .map((line) =>
+          line.product.id === productId
+            ? {
+                ...line,
+                quantity: line.quantity + delta,
+              }
+            : line
+        )
+        .filter((line) => line.quantity > 0)
+    );
+  }
+
+  const cartTotal = cart.reduce(
+    (sum, line) => sum + line.product.price * line.quantity,
+    0
+  );
+
+  const cartCount = cart.reduce(
+    (sum, line) => sum + line.quantity,
+    0
+  );
+
+  async function submitAdminOrder() {
+    if (!orderTable) {
+      return;
+    }
+
+    if (cart.length === 0) {
+      setOrderError("Захиалгад бараа сонгоно уу.");
+      return;
+    }
+
+    setPlacingOrder(true);
+    setOrderError("");
+    setOrderSuccess(false);
+
+    try {
+      const response = await fetch("/api/orders", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          table_number: orderTable.number,
+          items: cart.map((line) => ({
+            product_id: line.product.id,
+            quantity: line.quantity,
+          })),
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        setOrderError(
+          result.error || "Захиалга өгөхөд алдаа гарлаа."
+        );
+        return;
+      }
+
+      setCart([]);
+      setOrderSuccess(true);
+    } catch (error) {
+      console.error("ADMIN PLACE ORDER ERROR:", error);
+      setOrderError("Сервертэй холбогдоход алдаа гарлаа.");
+    } finally {
+      setPlacingOrder(false);
+    }
+  }
+
+  const visibleProducts = products.filter(
+    (product) =>
+      product.is_available &&
+      (activeCategoryId === null ||
+        product.category_id === activeCategoryId)
+  );
 
   const canvasRefs = useRef<
     Record<number, HTMLCanvasElement | null>
@@ -278,15 +434,19 @@ export default function TableManager({
                   className="rounded-xl border border-white/10 bg-zinc-800 p-5"
                 >
                   <div className="flex items-start justify-between gap-3">
-                    <div>
+                    <button
+                      type="button"
+                      onClick={() => openOrderForm(table)}
+                      className="text-left transition hover:opacity-80"
+                    >
                       <p className="text-2xl font-bold text-white">
                         {table.number}
                       </p>
 
-                      <p className="mt-1 text-xs text-zinc-500">
-                        Ширээ
+                      <p className="mt-1 text-xs text-amber-400">
+                        + Захиалга өгөх
                       </p>
-                    </div>
+                    </button>
 
                     <button
                       type="button"
@@ -389,6 +549,164 @@ export default function TableManager({
             >
               Хаах
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ==================================================
+          АДМИНААС ЗАХИАЛГА ӨГӨХ MODAL
+      ================================================== */}
+
+      {orderTable && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/80 p-0 sm:items-center sm:p-6"
+          onClick={closeOrderForm}
+        >
+          <div
+            className="flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-t-3xl border border-white/10 bg-zinc-900 shadow-2xl sm:rounded-3xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            {/* HEADER */}
+            <div className="flex items-center justify-between border-b border-white/10 p-5">
+              <div>
+                <p className="text-xs text-zinc-500">
+                  Ширээ
+                </p>
+                <h3 className="text-xl font-bold text-white">
+                  №{orderTable.number} — Захиалга өгөх
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={closeOrderForm}
+                className="rounded-lg p-2 text-zinc-400 hover:bg-white/10 hover:text-white"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* CATEGORY TABS */}
+            <div className="flex gap-2 overflow-x-auto border-b border-white/10 p-4">
+              {categories.map((category) => (
+                <button
+                  key={category.id}
+                  type="button"
+                  onClick={() =>
+                    setActiveCategoryId(category.id)
+                  }
+                  className={`shrink-0 rounded-full px-4 py-2 text-sm font-medium transition ${
+                    activeCategoryId === category.id
+                      ? "bg-amber-400 text-zinc-950"
+                      : "bg-white/5 text-zinc-300 hover:bg-white/10"
+                  }`}
+                >
+                  {category.name}
+                </button>
+              ))}
+            </div>
+
+            {/* PRODUCT GRID */}
+            <div className="flex-1 overflow-y-auto p-4">
+              {visibleProducts.length === 0 ? (
+                <p className="p-6 text-center text-sm text-zinc-500">
+                  Энэ ангилалд бараа алга.
+                </p>
+              ) : (
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                  {visibleProducts.map((product) => (
+                    <button
+                      key={product.id}
+                      type="button"
+                      onClick={() => addToCart(product)}
+                      className="rounded-xl border border-white/10 bg-zinc-800 p-3 text-left transition hover:border-amber-400/40"
+                    >
+                      <p className="text-sm font-semibold text-white">
+                        {product.name}
+                      </p>
+                      <p className="mt-1 text-xs text-amber-400">
+                        {product.price.toLocaleString()}₮
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* CART */}
+            {cart.length > 0 && (
+              <div className="max-h-40 overflow-y-auto border-t border-white/10 p-4">
+                {cart.map((line) => (
+                  <div
+                    key={line.product.id}
+                    className="mb-2 flex items-center justify-between gap-3 text-sm"
+                  >
+                    <span className="text-zinc-200">
+                      {line.product.name}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          changeQuantity(
+                            line.product.id,
+                            -1
+                          )
+                        }
+                        className="h-7 w-7 rounded-full bg-white/10 text-white hover:bg-white/20"
+                      >
+                        −
+                      </button>
+                      <span className="w-5 text-center text-white">
+                        {line.quantity}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          changeQuantity(
+                            line.product.id,
+                            1
+                          )
+                        }
+                        className="h-7 w-7 rounded-full bg-white/10 text-white hover:bg-white/20"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* ERROR / SUCCESS */}
+            {orderError && (
+              <div className="mx-4 mb-3 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-400">
+                {orderError}
+              </div>
+            )}
+
+            {orderSuccess && (
+              <div className="mx-4 mb-3 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-sm text-emerald-400">
+                ✓ Захиалга амжилттай өгөгдлөө.
+              </div>
+            )}
+
+            {/* SUBMIT */}
+            <div className="border-t border-white/10 p-4">
+              <button
+                type="button"
+                onClick={submitAdminOrder}
+                disabled={
+                  placingOrder || cart.length === 0
+                }
+                className="w-full rounded-xl bg-amber-400 px-5 py-4 text-base font-bold text-zinc-950 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {placingOrder
+                  ? "Илгээж байна..."
+                  : cartCount > 0
+                    ? `Захиалах — ${cartTotal.toLocaleString()}₮`
+                    : "Бараа сонгоно уу"}
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -695,6 +695,8 @@ export default function AdminDashboard({
 
                   <TableManager
                     tables={tables}
+                    products={products}
+                    categories={categories}
                   />
 
                 </div>
