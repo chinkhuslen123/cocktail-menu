@@ -418,6 +418,47 @@ if (!shift) {
         { status: 404 }
       );
     }
+        // =========================
+    // GET PRODUCT OPTIONS (milk)
+    // =========================
+
+    const { data: optionLinks, error: optionLinksError } =
+      await supabase
+        .from("product_option_groups")
+        .select(
+          "product_id, option_groups(options(id, name, extra_price))"
+        )
+        .in("product_id", productIds);
+
+    if (optionLinksError) {
+      console.error(
+        "PRODUCT OPTIONS FIND ERROR:",
+        optionLinksError
+      );
+
+      return NextResponse.json(
+        {
+          error: optionLinksError.message,
+        },
+        { status: 500 }
+      );
+    }
+
+    // productId -> тухайн бүтээгдэхүүнд зөвшөөрөгдсөн сонголтууд
+    const optionsByProduct = new Map<
+      number,
+      { id: number; name: string; extra_price: number }[]
+    >();
+
+    for (const link of optionLinks ?? []) {
+      const list = (link as any).option_groups?.options ?? [];
+      const productKey = Number((link as any).product_id);
+
+      optionsByProduct.set(productKey, [
+        ...(optionsByProduct.get(productKey) ?? []),
+        ...list,
+      ]);
+    }
 
     // =========================
     // CREATE ORDER ITEMS
@@ -466,18 +507,61 @@ if (!shift) {
         );
       }
 
-      const price = Number(product.price);
-const subtotal = price * quantity;
+            // Сонгосон сүү (байвал)
+      let option: {
+        id: number;
+        name: string;
+        extra_price: number;
+      } | null = null;
 
-total += subtotal;
+      if (
+        item.option_id !== null &&
+        item.option_id !== undefined
+      ) {
+        const optionId = Number(item.option_id);
 
-orderItems.push({
-  product_id: product.id,
-  product_name_snapshot: product.name,
-  unit_price_snapshot: price,
-  quantity,
-  subtotal,
-});
+        if (!Number.isInteger(optionId)) {
+          return NextResponse.json(
+            {
+              error: "Сонголтын мэдээлэл буруу байна.",
+            },
+            { status: 400 }
+          );
+        }
+
+        option =
+          (optionsByProduct.get(productId) ?? []).find(
+            (o) => Number(o.id) === optionId
+          ) ?? null;
+
+        if (!option) {
+          return NextResponse.json(
+            {
+              error: `"${product.name}" дээр энэ сонголт боломжгүй байна.`,
+            },
+            { status: 400 }
+          );
+        }
+      }
+
+      const extraPrice = option
+        ? Number(option.extra_price)
+        : 0;
+
+      const price = Number(product.price) + extraPrice;
+      const subtotal = price * quantity;
+
+      total += subtotal;
+
+      orderItems.push({
+        product_id: product.id,
+        product_name_snapshot: option
+          ? `${product.name} (${option.name})`
+          : product.name,
+        unit_price_snapshot: price,
+        quantity,
+        subtotal,
+      });
     }
 
     // =========================

@@ -2,6 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
+import {
+  useProductOptions,
+  type MilkOption,
+} from "@/lib/useProductOptions";
+
 const supabase = createSupabaseBrowserClient();
 
 type Category = {
@@ -31,7 +36,16 @@ type MenuViewProps = {
 type CartItem = {
   product: Product;
   quantity: number;
+  option: MilkOption | null;
 };
+
+function lineKey(item: CartItem) {
+  return `${item.product.id}-${item.option?.id ?? 0}`;
+}
+
+function unitPrice(item: CartItem) {
+  return Number(item.product.price) + (item.option?.extra_price ?? 0);
+}
 
 export default function MenuView({
   categories,
@@ -41,16 +55,22 @@ export default function MenuView({
   const [selectedProduct, setSelectedProduct] =
     useState<Product | null>(null);
 
+  const {
+    options,
+    selected: selectedOption,
+    setSelected: setSelectedOption,
+  } = useProductOptions(selectedProduct?.id ?? null);
+
   const [cart, setCart] = useState<CartItem[]>([]);
   const [showCart, setShowCart] = useState(false);
   const [ordering, setOrdering] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState(false);
   const [orderError, setOrderError] = useState("");
   const [myOrders, setMyOrders] = useState<any[]>([]);
-const [myOrdersLoading, setMyOrdersLoading] =
-  useState(false);
-const [showMyOrders, setShowMyOrders] =
-  useState(false);
+  const [myOrdersLoading, setMyOrdersLoading] =
+    useState(false);
+  const [showMyOrders, setShowMyOrders] =
+    useState(false);
 
   async function loadMyOrders() {
     if (!tableNumber) {
@@ -162,76 +182,69 @@ const [showMyOrders, setShowMyOrders] =
   const cartTotal = useMemo(() => {
     return cart.reduce(
       (total, item) =>
-        total +
-        Number(item.product.price) * item.quantity,
+        total + unitPrice(item) * item.quantity,
       0
     );
   }, [cart]);
 
-  function addToCart(product: Product) {
+  function addToCart(
+    product: Product,
+    option: MilkOption | null = null
+  ) {
     setOrderError("");
     setOrderSuccess(false);
 
     setCart((currentCart) => {
       const existing = currentCart.find(
-        (item) => item.product.id === product.id
+        (item) =>
+          item.product.id === product.id &&
+          (item.option?.id ?? null) ===
+            (option?.id ?? null)
       );
 
       if (existing) {
         return currentCart.map((item) =>
-          item.product.id === product.id
-            ? {
-                ...item,
-                quantity: item.quantity + 1,
-              }
+          item === existing
+            ? { ...item, quantity: item.quantity + 1 }
             : item
         );
       }
 
       return [
         ...currentCart,
-        {
-          product,
-          quantity: 1,
-        },
+        { product, quantity: 1, option },
       ];
     });
 
     setSelectedProduct(null);
   }
 
-  function increaseQuantity(productId: number) {
+  function increaseQuantity(key: string) {
     setCart((currentCart) =>
       currentCart.map((item) =>
-        item.product.id === productId
-          ? {
-              ...item,
-              quantity: item.quantity + 1,
-            }
+        lineKey(item) === key
+          ? { ...item, quantity: item.quantity + 1 }
           : item
       )
     );
   }
 
-  function decreaseQuantity(productId: number) {
+  function decreaseQuantity(key: string) {
     setCart((currentCart) =>
       currentCart
         .map((item) =>
-          item.product.id === productId
-            ? {
-                ...item,
-                quantity: item.quantity - 1,
-              }
+          lineKey(item) === key
+            ? { ...item, quantity: item.quantity - 1 }
             : item
         )
         .filter((item) => item.quantity > 0)
     );
   }
 
-  function removeFromCart(productId: number) {
+  function removeFromCart(key: string) {
     setCart((currentCart) =>
       currentCart.filter(
-        (item) => item.product.id !== productId
+        (item) => lineKey(item) !== key
       )
     );
   }
@@ -259,6 +272,7 @@ const [showMyOrders, setShowMyOrders] =
           items: cart.map((item) => ({
             product_id: item.product.id,
             quantity: item.quantity,
+            option_id: item.option?.id ?? null,
           })),
         }),
       });
@@ -274,27 +288,27 @@ const [showMyOrders, setShowMyOrders] =
       }
 
       if (result.order?.id) {
-  const existingIds = JSON.parse(
-    localStorage.getItem("my_order_ids") || "[]"
-  );
+        const existingIds = JSON.parse(
+          localStorage.getItem("my_order_ids") || "[]"
+        );
 
-  const updatedIds = [
-    Number(result.order.id),
-    ...existingIds.filter(
-      (id: number) =>
-        Number(id) !== Number(result.order.id)
-    ),
-  ];
+        const updatedIds = [
+          Number(result.order.id),
+          ...existingIds.filter(
+            (id: number) =>
+              Number(id) !== Number(result.order.id)
+          ),
+        ];
 
-  localStorage.setItem(
-    "my_order_ids",
-    JSON.stringify(updatedIds.slice(0, 20))
-  );
-}
+        localStorage.setItem(
+          "my_order_ids",
+          JSON.stringify(updatedIds.slice(0, 20))
+        );
+      }
 
-setCart([]);
-setShowCart(false);
-setOrderSuccess(true);
+      setCart([]);
+      setShowCart(false);
+      setOrderSuccess(true);
     } catch (error) {
       console.error("PLACE ORDER ERROR:", error);
 
@@ -305,7 +319,6 @@ setOrderSuccess(true);
       setOrdering(false);
     }
   }
-
 
   return (
     <main className="min-h-screen bg-[#0b0b0b] text-white">
@@ -330,27 +343,27 @@ setOrderSuccess(true);
             </div>
 
             <div className="flex shrink-0 flex-col items-end gap-3">
-  <button
-    type="button"
-    onClick={() => {
-      setShowMyOrders(true);
-      loadMyOrders();
-    }}
-    className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-semibold text-white transition hover:border-amber-400/40 hover:bg-amber-400/10 hover:text-amber-300"
-  >
-    📋 Миний захиалга
-  </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowMyOrders(true);
+                  loadMyOrders();
+                }}
+                className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-semibold text-white transition hover:border-amber-400/40 hover:bg-amber-400/10 hover:text-amber-300"
+              >
+                📋 Миний захиалга
+              </button>
 
-  <div className="rounded-2xl border border-amber-400/20 bg-amber-400/10 px-5 py-3 text-center">
-    <p className="text-xs text-zinc-400">
-      Ширээ
-    </p>
+              <div className="rounded-2xl border border-amber-400/20 bg-amber-400/10 px-5 py-3 text-center">
+                <p className="text-xs text-zinc-400">
+                  Ширээ
+                </p>
 
-    <p className="text-2xl font-bold text-amber-300">
-      {tableNumber}
-    </p>
-  </div>
-</div>
+                <p className="text-2xl font-bold text-amber-300">
+                  {tableNumber}
+                </p>
+              </div>
+            </div>
           </div>
         </div>
       </header>
@@ -522,7 +535,8 @@ setOrderSuccess(true);
           Cocktail Bar
         </p>
       </footer>
-            {/* PRODUCT DETAIL MODAL */}
+
+      {/* PRODUCT DETAIL MODAL */}
       {selectedProduct && (
         <div
           className="fixed inset-0 z-50 flex items-end justify-center bg-black/80 p-0 backdrop-blur-sm sm:items-center sm:p-6"
@@ -575,8 +589,9 @@ setOrderSuccess(true);
                 </div>
 
                 <div className="shrink-0 rounded-full border border-amber-400/20 bg-amber-400/10 px-4 py-2 text-sm font-bold text-amber-300 sm:text-base">
-                  {Number(
-                    selectedProduct.price
+                  {(
+                    Number(selectedProduct.price) +
+                    (selectedOption?.extra_price ?? 0)
                   ).toLocaleString()}
                   ₮
                 </div>
@@ -606,11 +621,54 @@ setOrderSuccess(true);
                 </div>
               )}
 
+              {options.length > 0 && (
+                <div className="mt-8 border-t border-white/10 pt-6">
+                  <h3 className="text-sm font-semibold uppercase tracking-wider text-white">
+                    Milk
+                  </h3>
+
+                  <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                    {options.map((option) => {
+                      const active =
+                        selectedOption?.id === option.id;
+
+                      return (
+                        <button
+                          key={option.id}
+                          type="button"
+                          onClick={() =>
+                            setSelectedOption(option)
+                          }
+                          className={`rounded-xl border px-4 py-3 text-left text-sm transition ${
+                            active
+                              ? "border-amber-400 bg-amber-400/10 text-amber-300"
+                              : "border-white/10 bg-white/5 text-zinc-300 hover:bg-white/10"
+                          }`}
+                        >
+                          <p className="font-semibold">
+                            {option.name}
+                          </p>
+
+                          <p className="mt-1 text-xs">
+                            {option.extra_price > 0
+                              ? `+${option.extra_price.toLocaleString()}₮`
+                              : "Үнэгүй"}
+                          </p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               <div className="mt-8 flex gap-3">
                 <button
                   type="button"
                   onClick={() =>
-                    addToCart(selectedProduct)
+                    addToCart(
+                      selectedProduct,
+                      selectedOption
+                    )
                   }
                   className="flex-1 rounded-xl bg-amber-400 px-5 py-3 font-bold text-zinc-950 transition hover:bg-amber-300"
                 >
@@ -667,7 +725,7 @@ setOrderSuccess(true);
             <div className="space-y-3 p-5">
               {cart.map((item) => (
                 <div
-                  key={item.product.id}
+                  key={lineKey(item)}
                   className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"
                 >
                   <div className="flex gap-3">
@@ -683,13 +741,15 @@ setOrderSuccess(true);
                       <div className="flex justify-between gap-3">
                         <h3 className="font-semibold">
                           {item.product.name}
+                          {item.option
+                            ? ` (${item.option.name})`
+                            : ""}
                         </h3>
 
                         <span className="shrink-0 text-sm font-bold text-amber-400">
                           {(
-                            Number(
-                              item.product.price
-                            ) * item.quantity
+                            unitPrice(item) *
+                            item.quantity
                           ).toLocaleString()}
                           ₮
                         </span>
@@ -701,7 +761,7 @@ setOrderSuccess(true);
                             type="button"
                             onClick={() =>
                               decreaseQuantity(
-                                item.product.id
+                                lineKey(item)
                               )
                             }
                             className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/5 hover:bg-white/10"
@@ -717,7 +777,7 @@ setOrderSuccess(true);
                             type="button"
                             onClick={() =>
                               increaseQuantity(
-                                item.product.id
+                                lineKey(item)
                               )
                             }
                             className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/5 hover:bg-white/10"
@@ -730,7 +790,7 @@ setOrderSuccess(true);
                           type="button"
                           onClick={() =>
                             removeFromCart(
-                              item.product.id
+                              lineKey(item)
                             )
                           }
                           className="text-xs text-red-400 hover:text-red-300"
@@ -774,7 +834,7 @@ setOrderSuccess(true);
             </div>
           </div>
         </div>
-            )}
+      )}
 
       {/* MY ORDERS MODAL */}
       {showMyOrders && (
@@ -858,8 +918,6 @@ setOrderSuccess(true);
                                 : ""}
                             </p>
                           </div>
-
-                        
                         </div>
                       </div>
 
@@ -928,7 +986,6 @@ setOrderSuccess(true);
           </div>
         </div>
       )}
-
     </main>
   );
 }

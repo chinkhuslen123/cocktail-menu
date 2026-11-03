@@ -1,8 +1,17 @@
 "use client";
 
-import { FormEvent, useRef, useState } from "react";
+import {
+  FormEvent,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { useRouter } from "next/navigation";
 import { QRCodeCanvas } from "qrcode.react";
+import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
+import type { MilkOption } from "@/lib/useProductOptions";
+
+const supabase = createSupabaseBrowserClient();
 
 type Table = {
   id: number;
@@ -32,7 +41,19 @@ type Product = {
 type CartLine = {
   product: Product;
   quantity: number;
+  option: MilkOption | null;
 };
+
+function lineKey(line: CartLine) {
+  return `${line.product.id}-${line.option?.id ?? 0}`;
+}
+
+function unitPrice(line: CartLine) {
+  return (
+    Number(line.product.price) +
+    (line.option?.extra_price ?? 0)
+  );
+}
 
 type TableManagerProps = {
   tables: Table[];
@@ -71,11 +92,80 @@ export default function TableManager({
   const [orderError, setOrderError] = useState("");
   const [orderSuccess, setOrderSuccess] = useState(false);
 
+  // Бүтээгдэхүүн бүрийн сүүний сонголтууд (product_id -> сонголтууд)
+  const [optionsByProduct, setOptionsByProduct] = useState<
+    Record<number, MilkOption[]>
+  >({});
+  const [optionsLoaded, setOptionsLoaded] = useState(false);
+
+  // Сүү сонгох жижиг цонх
+  const [pendingProduct, setPendingProduct] =
+    useState<Product | null>(null);
+  const [pendingOption, setPendingOption] =
+    useState<MilkOption | null>(null);
+
+  // Захиалгын цонх нээгдэхэд сүүний сонголтуудыг нэг удаа татна
+  useEffect(() => {
+    if (!orderTable || optionsLoaded) {
+      return;
+    }
+
+    let cancelled = false;
+
+    (async () => {
+      const { data, error } = await supabase
+        .from("product_option_groups")
+        .select(
+          "product_id, option_groups(options(id, name, extra_price))"
+        );
+
+      if (cancelled) {
+        return;
+      }
+
+      if (error) {
+        console.error(
+          "LOAD OPTIONS ERROR:",
+          error.message,
+          error.code
+        );
+        return;
+      }
+
+      const map: Record<number, MilkOption[]> = {};
+
+      for (const row of (data ?? []) as any[]) {
+        const productId = Number(row.product_id);
+        const list: MilkOption[] = (
+          row.option_groups?.options ?? []
+        ).map((o: any) => ({
+          id: o.id,
+          name: o.name,
+          extra_price: Number(o.extra_price),
+        }));
+
+        map[productId] = [
+          ...(map[productId] ?? []),
+          ...list,
+        ].sort((a, b) => a.extra_price - b.extra_price);
+      }
+
+      setOptionsByProduct(map);
+      setOptionsLoaded(true);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [orderTable, optionsLoaded]);
+
   function openOrderForm(table: Table) {
     setOrderTable(table);
     setCart([]);
     setOrderError("");
     setOrderSuccess(false);
+    setPendingProduct(null);
+    setPendingOption(null);
     setActiveCategoryId(categories[0]?.id ?? null);
   }
 
@@ -84,31 +174,65 @@ export default function TableManager({
     setCart([]);
     setOrderError("");
     setOrderSuccess(false);
+    setPendingProduct(null);
+    setPendingOption(null);
   }
 
-  function addToCart(product: Product) {
+  function addToCart(
+    product: Product,
+    option: MilkOption | null = null
+  ) {
+    setOrderSuccess(false);
+
     setCart((current) => {
       const existing = current.find(
-        (line) => line.product.id === product.id
+        (line) =>
+          line.product.id === product.id &&
+          (line.option?.id ?? null) === (option?.id ?? null)
       );
 
       if (existing) {
         return current.map((line) =>
-          line.product.id === product.id
+          line === existing
             ? { ...line, quantity: line.quantity + 1 }
             : line
         );
       }
 
-      return [...current, { product, quantity: 1 }];
+      return [...current, { product, quantity: 1, option }];
     });
   }
 
-  function changeQuantity(productId: number, delta: number) {
+  // Бүтээгдэхүүн дарахад: сүүтэй бол сонголт асууна, үгүй бол шууд нэмнэ
+  function handleProductClick(product: Product) {
+    const list = optionsByProduct[product.id] ?? [];
+
+    if (list.length === 0) {
+      addToCart(product);
+      return;
+    }
+
+    setPendingProduct(product);
+    setPendingOption(
+      list.find((o) => o.extra_price === 0) ?? list[0] ?? null
+    );
+  }
+
+  function confirmPending() {
+    if (!pendingProduct) {
+      return;
+    }
+
+    addToCart(pendingProduct, pendingOption);
+    setPendingProduct(null);
+    setPendingOption(null);
+  }
+
+  function changeQuantity(key: string, delta: number) {
     setCart((current) =>
       current
         .map((line) =>
-          line.product.id === productId
+          lineKey(line) === key
             ? {
                 ...line,
                 quantity: line.quantity + delta,
@@ -120,7 +244,7 @@ export default function TableManager({
   }
 
   const cartTotal = cart.reduce(
-    (sum, line) => sum + line.product.price * line.quantity,
+    (sum, line) => sum + unitPrice(line) * line.quantity,
     0
   );
 
@@ -154,6 +278,7 @@ export default function TableManager({
           items: cart.map((line) => ({
             product_id: line.product.id,
             quantity: line.quantity,
+            option_id: line.option?.id ?? null,
           })),
         }),
       });
@@ -563,7 +688,7 @@ export default function TableManager({
           onClick={closeOrderForm}
         >
           <div
-            className="flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-t-3xl border border-white/10 bg-zinc-900 shadow-2xl sm:rounded-3xl"
+            className="relative flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-t-3xl border border-white/10 bg-zinc-900 shadow-2xl sm:rounded-3xl"
             onClick={(event) => event.stopPropagation()}
           >
             {/* HEADER */}
@@ -617,14 +742,19 @@ export default function TableManager({
                     <button
                       key={product.id}
                       type="button"
-                      onClick={() => addToCart(product)}
+                      onClick={() =>
+                        handleProductClick(product)
+                      }
                       className="rounded-xl border border-white/10 bg-zinc-800 p-3 text-left transition hover:border-amber-400/40"
                     >
                       <p className="text-sm font-semibold text-white">
                         {product.name}
                       </p>
                       <p className="mt-1 text-xs text-amber-400">
-                        {product.price.toLocaleString()}₮
+                        {Number(
+                          product.price
+                        ).toLocaleString()}
+                        ₮
                       </p>
                     </button>
                   ))}
@@ -637,20 +767,20 @@ export default function TableManager({
               <div className="max-h-40 overflow-y-auto border-t border-white/10 p-4">
                 {cart.map((line) => (
                   <div
-                    key={line.product.id}
+                    key={lineKey(line)}
                     className="mb-2 flex items-center justify-between gap-3 text-sm"
                   >
                     <span className="text-zinc-200">
                       {line.product.name}
+                      {line.option
+                        ? ` (${line.option.name})`
+                        : ""}
                     </span>
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
                         onClick={() =>
-                          changeQuantity(
-                            line.product.id,
-                            -1
-                          )
+                          changeQuantity(lineKey(line), -1)
                         }
                         className="h-7 w-7 rounded-full bg-white/10 text-white hover:bg-white/20"
                       >
@@ -662,10 +792,7 @@ export default function TableManager({
                       <button
                         type="button"
                         onClick={() =>
-                          changeQuantity(
-                            line.product.id,
-                            1
-                          )
+                          changeQuantity(lineKey(line), 1)
                         }
                         className="h-7 w-7 rounded-full bg-white/10 text-white hover:bg-white/20"
                       >
@@ -707,6 +834,88 @@ export default function TableManager({
                     : "Бараа сонгоно уу"}
               </button>
             </div>
+
+            {/* СҮҮ СОНГОХ ЖИЖИГ ЦОНХ */}
+            {pendingProduct && (
+              <div
+                className="absolute inset-0 z-10 flex items-end justify-center bg-black/70 sm:items-center sm:p-6"
+                onClick={() => {
+                  setPendingProduct(null);
+                  setPendingOption(null);
+                }}
+              >
+                <div
+                  className="w-full rounded-t-3xl border border-white/10 bg-zinc-900 p-5 shadow-2xl sm:max-w-sm sm:rounded-3xl"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <p className="text-xs text-zinc-500">
+                    Milk
+                  </p>
+                  <h4 className="mt-1 text-lg font-bold text-white">
+                    {pendingProduct.name}
+                  </h4>
+
+                  <div className="mt-4 space-y-2">
+                    {(
+                      optionsByProduct[pendingProduct.id] ?? []
+                    ).map((option) => {
+                      const active =
+                        pendingOption?.id === option.id;
+
+                      return (
+                        <button
+                          key={option.id}
+                          type="button"
+                          onClick={() =>
+                            setPendingOption(option)
+                          }
+                          className={`flex w-full items-center justify-between rounded-xl border px-4 py-3 text-left text-sm transition ${
+                            active
+                              ? "border-amber-400 bg-amber-400/10 text-amber-300"
+                              : "border-white/10 bg-white/5 text-zinc-300 hover:bg-white/10"
+                          }`}
+                        >
+                          <span className="font-semibold">
+                            {option.name}
+                          </span>
+                          <span className="text-xs">
+                            {option.extra_price > 0
+                              ? `+${option.extra_price.toLocaleString()}₮`
+                              : "Үнэгүй"}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="mt-5 flex gap-3">
+                    <button
+                      type="button"
+                      onClick={confirmPending}
+                      className="flex-1 rounded-xl bg-amber-400 px-5 py-3 font-bold text-zinc-950 transition hover:bg-amber-300"
+                    >
+                      Нэмэх —{" "}
+                      {(
+                        Number(pendingProduct.price) +
+                        (pendingOption?.extra_price ?? 0)
+                      ).toLocaleString()}
+                      ₮
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPendingProduct(null);
+                        setPendingOption(null);
+                      }}
+                      className="rounded-xl border border-white/10 bg-white/5 px-5 py-3 font-medium text-zinc-300 transition hover:bg-white/10"
+                    >
+                      Болих
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

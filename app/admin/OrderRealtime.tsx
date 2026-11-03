@@ -522,21 +522,29 @@ export default function OrderRealtime() {
   // PRINT VIA POPUP (үндсэн хуудсыг блоклохгүйн тулд)
   // =========================
 
-  function printInPopup(bodyHtml: string) {
-    const printWindow = window.open(
-      "",
-      "_blank",
-      "width=380,height=600"
-    );
+    function printInPopup(bodyHtml: string) {
+    const iframe = document.createElement("iframe");
 
-    if (!printWindow) {
-      console.error(
-        "PRINT POPUP BLOCKED: browser popup blocker-т хориглогдсон байж магадгүй."
-      );
+    iframe.style.position = "fixed";
+    iframe.style.left = "-9999px";
+    iframe.style.top = "0";
+    iframe.style.width = "80mm";
+    iframe.style.height = "0";
+    iframe.style.border = "0";
+
+    document.body.appendChild(iframe);
+
+    const printWindow = iframe.contentWindow;
+    const doc = printWindow?.document;
+
+    if (!printWindow || !doc) {
+      console.error("PRINT FRAME ERROR: iframe үүсгэж чадсангүй.");
+      iframe.remove();
       return;
     }
 
-    printWindow.document.write(`
+    doc.open();
+    doc.write(`
       <html>
         <head>
           <title>Тасалбар</title>
@@ -586,21 +594,21 @@ export default function OrderRealtime() {
         </body>
       </html>
     `);
+    doc.close();
 
-    printWindow.document.close();
-    printWindow.focus();
-
-    // Хэвлэх dialog-г нээгээд, хаагдмагц (хэвлэсэн ч,
-    // цуцалсан ч) popup-ыг өөрөө хаана — үндсэн хуудас
-    // энэ хугацаанд ЗОГСОХГҮЙ, дараагийн захиалгыг
-    // боловсруулсаар байна.
+    // Хэвлэж дууссаны дараа далд iframe-ийг устгана
     printWindow.onafterprint = () => {
-      printWindow.close();
+      setTimeout(() => iframe.remove(), 500);
     };
 
+    // Хэвлэх
     setTimeout(() => {
+      printWindow.focus();
       printWindow.print();
-    }, 250);
+    }, 300);
+
+    // Найдвартай байдлын үүднээс: ямар нэг шалтгаанаар onafterprint ажиллаагүй бол цэвэрлэнэ
+    setTimeout(() => iframe.remove(), 60000);
   }
 
   // =========================
