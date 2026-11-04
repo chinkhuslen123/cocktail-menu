@@ -1,13 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import {
   useProductOptions,
   type MilkOption,
 } from "@/lib/useProductOptions";
-
-const supabase = createSupabaseBrowserClient();
 
 type Category = {
   id: number;
@@ -111,34 +108,12 @@ export default function MenuView({
   useEffect(() => {
     loadMyOrders();
 
-    const channel = supabase
-      .channel("my-orders-realtime")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "orders",
-        },
-        () => {
-          loadMyOrders();
-        }
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "order_items",
-        },
-        () => {
-          loadMyOrders();
-        }
-      )
-      .subscribe();
+    const timer = setInterval(() => {
+      loadMyOrders();
+    }, 5000);
 
     return () => {
-      supabase.removeChannel(channel);
+      clearInterval(timer);
     };
   }, []);
 
