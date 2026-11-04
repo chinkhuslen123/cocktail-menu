@@ -51,6 +51,12 @@ export async function GET(request: Request) {
     // =========================
 
     if (orderIdsParam) {
+      if (!(await isAdminUser())) {
+        return NextResponse.json(
+          { error: "Нэвтрэх шаардлагатай." },
+          { status: 401 }
+        );
+      }
       const ids = orderIdsParam
         .split(",")
         .map((id) => Number(id))

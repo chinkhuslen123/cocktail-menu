@@ -3,7 +3,22 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 
 export async function POST(request: Request) {
   try {
-    const supabase = await createSupabaseServerClient();
+        const supabase = await createSupabaseServerClient();
+
+    // =========================
+    // ADMIN AUTH
+    // =========================
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json(
+        { error: "Нэвтрэх шаардлагатай." },
+        { status: 401 }
+      );
+    }
 
     const body = await request.json();
 
