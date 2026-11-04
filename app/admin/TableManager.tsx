@@ -98,6 +98,40 @@ export default function TableManager({
   >({});
   const [optionsLoaded, setOptionsLoaded] = useState(false);
 
+  // Ширээ бүрийн нууц токен (table_id -> token). Зөвхөн нэвтэрсэн админ уншина.
+  const [tokens, setTokens] = useState<Record<number, string>>({});
+
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      const { data, error } = await supabase
+        .from("table_tokens")
+        .select("table_id, token");
+
+      if (cancelled) {
+        return;
+      }
+
+      if (error) {
+        console.error("LOAD TOKENS ERROR:", error.message, error.code);
+        return;
+      }
+
+      const map: Record<number, string> = {};
+
+      for (const row of (data ?? []) as any[]) {
+        map[Number(row.table_id)] = String(row.token);
+      }
+
+      setTokens(map);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [tables]);
+
   // Сүү сонгох жижиг цонх
   const [pendingProduct, setPendingProduct] =
     useState<Product | null>(null);
@@ -318,8 +352,9 @@ export default function TableManager({
       ? window.location.origin
       : "";
 
-  function tableUrl(tableNumber: number) {
-    return `${origin}/table/${tableNumber}`;
+  function tableUrl(table: Table) {
+    const token = tokens[table.id] ?? "";
+    return `${origin}/table/${table.number}?t=${token}`;
   }
 
   async function handleSubmit(
@@ -596,14 +631,20 @@ export default function TableManager({
                     onClick={() => setQrTable(table)}
                     className="mt-4 flex w-full items-center justify-center rounded-xl border border-white/10 bg-white p-3 transition hover:border-white/30"
                   >
-                    <QRCodeCanvas
-                      value={tableUrl(table.number)}
-                      size={96}
-                      level="M"
-                      ref={(node: HTMLCanvasElement | null) => {
-                        canvasRefs.current[table.id] = node;
-                      }}
-                    />
+                    {tokens[table.id] ? (
+                      <QRCodeCanvas
+                        value={tableUrl(table)}
+                        size={96}
+                        level="M"
+                        ref={(node: HTMLCanvasElement | null) => {
+                          canvasRefs.current[table.id] = node;
+                        }}
+                      />
+                    ) : (
+                      <span className="py-9 text-xs text-zinc-500">
+                        Токен ачаалж байна...
+                      </span>
+                    )}
                   </button>
 
                   <p className="mt-2 text-center text-[11px] text-zinc-500">
@@ -635,18 +676,24 @@ export default function TableManager({
             </h3>
 
             <div className="mt-5 flex justify-center rounded-xl bg-white p-4">
-              <QRCodeCanvas
-                value={tableUrl(qrTable.number)}
-                size={200}
-                level="M"
-                ref={(node: HTMLCanvasElement | null) => {
-                  canvasRefs.current[qrTable.id] = node;
-                }}
-              />
+              {tokens[qrTable.id] ? (
+                <QRCodeCanvas
+                  value={tableUrl(qrTable)}
+                  size={200}
+                  level="M"
+                  ref={(node: HTMLCanvasElement | null) => {
+                    canvasRefs.current[qrTable.id] = node;
+                  }}
+                />
+              ) : (
+                <span className="py-20 text-sm text-zinc-500">
+                  Токен олдсонгүй
+                </span>
+              )}
             </div>
 
             <p className="mt-4 break-all text-xs text-zinc-500">
-              {tableUrl(qrTable.number)}
+              {tableUrl(qrTable)}
             </p>
 
             <div className="mt-6 grid grid-cols-2 gap-3">

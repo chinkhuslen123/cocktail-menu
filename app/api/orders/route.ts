@@ -1,5 +1,41 @@
 import { NextResponse } from "next/server";
 import { createSupabaseAdminClient } from "@/lib/supabase-admin";
+import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { timingSafeEqual } from "crypto";
+
+async function isValidTableToken(
+  supabase: any,
+  tableId: number,
+  token: unknown
+) {
+  if (typeof token !== "string" || token.length < 10 || token.length > 100) {
+    return false;
+  }
+
+  const { data, error } = await supabase
+    .from("table_tokens")
+    .select("token")
+    .eq("table_id", tableId)
+    .maybeSingle();
+
+  if (error || !data) {
+    return false;
+  }
+
+  const a = Buffer.from(String(data.token));
+  const b = Buffer.from(token);
+
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+async function isAdminUser() {
+  const authClient = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await authClient.auth.getUser();
+
+  return !!user;
+}
 
 export async function GET(request: Request) {
   try {
@@ -109,7 +145,7 @@ export async function GET(request: Request) {
     // ORDERS BY TABLE
     // =========================
 
-    if (tableNumberParam) {
+        if (tableNumberParam) {
       const tableNumber = Number(
         tableNumberParam
       );
@@ -157,6 +193,22 @@ export async function GET(request: Request) {
           { status: 404 }
         );
       }
+
+      if (
+        !(await isAdminUser()) &&
+        !(await isValidTableToken(
+          supabase,
+          table.id,
+          searchParams.get("token")
+        ))
+      ) {
+        return NextResponse.json(
+          { error: "Ширээний код буруу байна." },
+          { status: 403 }
+        );
+      }
+
+    
 
       const {
   data: orders,
@@ -363,6 +415,19 @@ if (!shift) {
           error: `${tableNumber}-р ширээ олдсонгүй.`,
         },
         { status: 404 }
+      );
+    }
+        // =========================
+    // TABLE TOKEN (админаас бусад)
+    // =========================
+
+    if (
+      !(await isAdminUser()) &&
+      !(await isValidTableToken(supabase, table.id, body.token))
+    ) {
+      return NextResponse.json(
+        { error: "Ширээний код буруу байна. QR кодоо дахин уншуулна уу." },
+        { status: 403 }
       );
     }
 

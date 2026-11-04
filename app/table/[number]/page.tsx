@@ -6,12 +6,17 @@ type PageProps = {
   params: Promise<{
     number: string;
   }>;
+  searchParams: Promise<{
+    t?: string;
+  }>;
 };
 
 export default async function TableMenuPage({
   params,
+  searchParams,
 }: PageProps) {
   const { number } = await params;
+  const { t } = await searchParams;
 
   const tableNumber = Number(number);
 
@@ -137,10 +142,11 @@ export default async function TableMenuPage({
 
         {/* MENU */}
 
-        <MenuView
+                <MenuView
           categories={categories ?? []}
           products={products ?? []}
           tableNumber={table.number}
+          token={t ?? ""}
         />
       </div>
     </main>

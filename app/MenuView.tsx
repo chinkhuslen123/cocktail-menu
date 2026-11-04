@@ -28,6 +28,7 @@ type MenuViewProps = {
   categories: Category[];
   products: Product[];
   tableNumber?: number;
+  token?: string;
 };
 
 type CartItem = {
@@ -48,6 +49,7 @@ export default function MenuView({
   categories,
   products,
   tableNumber,
+  token = "",
 }: MenuViewProps) {
   const [selectedProduct, setSelectedProduct] =
     useState<Product | null>(null);
@@ -70,7 +72,8 @@ export default function MenuView({
     useState(false);
 
   async function loadMyOrders() {
-    if (!tableNumber) {
+    // Токенгүй (QR уншуулаагүй) бол захиалга татахгүй
+    if (!tableNumber || !token) {
       setMyOrders([]);
       return;
     }
@@ -79,13 +82,19 @@ export default function MenuView({
 
     try {
       const response = await fetch(
-        `/api/orders?table_number=${tableNumber}`,
+        `/api/orders?table_number=${tableNumber}&token=${encodeURIComponent(token)}`,
         {
           cache: "no-store",
         }
       );
 
       const result = await response.json();
+
+      if (response.status === 403) {
+        // Токен буруу: захиалга харуулахгүй, консолд давтан алдаа гаргахгүй
+        setMyOrders([]);
+        return;
+      }
 
       if (!response.ok) {
         console.error(
@@ -244,6 +253,7 @@ export default function MenuView({
         },
         body: JSON.stringify({
           table_number: tableNumber,
+          token,
           items: cart.map((item) => ({
             product_id: item.product.id,
             quantity: item.quantity,
