@@ -313,19 +313,19 @@ export default function MenuView({
 
         <div className="relative mx-auto max-w-7xl px-5 py-10 text-center sm:px-6 sm:py-14">
           <div className="flex items-center justify-between gap-4">
-            <div className="text-left">
-              <p className="text-xs font-medium uppercase tracking-[0.4em] text-amber-400">
-                Cocktail Bar
-              </p>
+                <div className="text-left">
+                  <p className="text-sm font-semibold uppercase tracking-[0.4em] text-amber-400 sm:text-base">
+      Crescita
+    </p>
 
-              <h1 className="mt-3 text-3xl font-bold tracking-tight sm:text-5xl">
-                Our Menu
-              </h1>
+    <h1 className="mt-3 text-2xl font-bold tracking-tight sm:text-4xl">
+      Our Menu
+    </h1>
 
-              <p className="mt-3 text-sm text-zinc-400">
-                Өөрийн дуртай cocktail-оо сонгоорой.
-              </p>
-            </div>
+                  <p className="mt-3 text-sm text-zinc-400">
+                    Таны захиалга бидэнд шууд ирнэ.
+                  </p>
+                </div>
 
             <div className="flex shrink-0 flex-col items-end gap-3">
               <button

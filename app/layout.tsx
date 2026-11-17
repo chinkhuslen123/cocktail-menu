@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Cocktail Bar",
-  description: "Cocktail Bar Menu",
+  title: "Crescita",
+  description: "Crescita Menu",
 };
 
 type RootLayoutProps = {
