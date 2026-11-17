@@ -456,12 +456,12 @@ export default function MenuView({
                       )}
                     </div>
 
-                    <div className="flex items-center justify-between gap-3 p-4 sm:p-5">
-                      <h3 className="min-w-0 truncate text-base font-semibold tracking-tight sm:text-lg">
+                                        <div className="flex flex-col gap-1 p-4 sm:flex-row sm:items-start sm:justify-between sm:gap-3 sm:p-5">
+                      <h3 className="min-w-0 break-words text-base font-semibold leading-snug tracking-tight sm:text-lg">
                         {product.name}
                       </h3>
 
-                      <span className="shrink-0 text-sm font-bold text-amber-400 sm:text-base">
+                      <span className="shrink-0 whitespace-nowrap text-sm font-bold text-amber-400 sm:text-base">
                         {Number(
                           product.price
                         ).toLocaleString()}
