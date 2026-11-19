@@ -71,7 +71,7 @@ export async function GET(request: Request) {
   await supabase
     .from("orders")
     .select(
-      "id, table_id, shift_id, status, created_at, total_amount, total"
+      "id, table_id, shift_id, status, created_at, total_amount, total,note"
     )
     .in("id", ids)
     .neq("status", "done")
@@ -222,7 +222,7 @@ export async function GET(request: Request) {
 } = await supabase
   .from("orders")
   .select(
-    "id, table_id, shift_id, status, created_at, total_amount, total"
+    "id, table_id, shift_id, status, created_at, total_amount, total,note"
   )
   .eq("table_id", table.id)
   .neq("status", "done")
@@ -334,6 +334,11 @@ export async function POST(request: Request) {
 
     const tableNumber = Number(body.table_number);
     const items = body.items;
+
+        const note =
+      typeof body.note === "string"
+        ? body.note.replace(/\s+/g, " ").trim().slice(0, 200)
+        : "";
 
     // =========================
     // VALIDATION
@@ -649,10 +654,10 @@ if (!shift) {
         status: "new",
         total_amount: total,
         total: total,
+        note: note || null,
         })
-        .select(
-        "id, table_id, status, total, created_at"
-        )
+                .select(
+                  "id, table_id, status, total, created_at, note")
         .single();
 
     if (orderError) {

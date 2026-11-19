@@ -16,6 +16,7 @@ type Order = {
   created_at: string;
   total_amount: number;
   total: number;
+  note?: string | null;
 };
 
 type OrderItem = {
@@ -81,7 +82,7 @@ export default function OrderRealtime() {
       const { data: orderData, error: orderError } = await supabase
         .from("orders")
         .select(
-          "id, table_id, shift_id, status, created_at, total_amount, total"
+          "id, table_id, shift_id, status, created_at, total_amount, total,note"
         )
         .neq("status", "done")
         .order("created_at", {
@@ -179,7 +180,7 @@ export default function OrderRealtime() {
       const { data: order, error: orderError } = await supabase
         .from("orders")
         .select(
-          "id, table_id, shift_id, status, created_at, total_amount, total"
+          "id, table_id, shift_id, status, created_at, total_amount, total,note"
         )
         .eq("id", orderId)
         .maybeSingle();
@@ -390,6 +391,15 @@ export default function OrderRealtime() {
       <div class="line"></div>
       <div class="row"><span>Ширээ</span><span class="bold">№${currentPrintOrder.tableNumber}</span></div>
       <div class="row"><span>Захиалга</span><span>#${currentPrintOrder.id}</span></div>
+            ${
+        currentPrintOrder.note
+          ? `<div class="dotted"></div>
+             <p class="bold" style="font-size:12px;margin:2px 0;">ТАЙЛБАР:</p>
+             <p style="font-size:13px;margin:2px 0;white-space:pre-wrap;">${escapeHtml(
+               String(currentPrintOrder.note)
+             )}</p>`
+          : ""
+      }
       <div class="line"></div>
       <div class="row bold"><span>Бүтээгдэхүүн</span><span>Тоо</span><span>Дүн</span></div>
       <div class="dotted"></div>
@@ -506,6 +516,14 @@ export default function OrderRealtime() {
   // =========================
   // FORMATTERS
   // =========================
+    function escapeHtml(value: string) {
+    return value
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
 
   function formatPrice(price: number) {
     return Number(price).toLocaleString("mn-MN");

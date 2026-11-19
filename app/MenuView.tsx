@@ -65,6 +65,7 @@ export default function MenuView({
   const [ordering, setOrdering] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState(false);
   const [orderError, setOrderError] = useState("");
+    const [orderNote, setOrderNote] = useState("");
   const [myOrders, setMyOrders] = useState<any[]>([]);
   const [myOrdersLoading, setMyOrdersLoading] =
     useState(false);
@@ -253,6 +254,7 @@ export default function MenuView({
         },
         body: JSON.stringify({
           table_number: tableNumber,
+          note: orderNote.trim(),
           token,
           items: cart.map((item) => ({
             product_id: item.product.id,
@@ -292,6 +294,7 @@ export default function MenuView({
       }
 
       setCart([]);
+      setOrderNote("");
       setShowCart(false);
       setOrderSuccess(true);
     } catch (error) {
@@ -676,6 +679,7 @@ export default function MenuView({
       )}
 
       {/* CART MODAL */}
+            {/* CART MODAL */}
       {showCart && (
         <div
           className="fixed inset-0 z-50 flex items-end justify-center bg-black/80 backdrop-blur-sm sm:items-center sm:p-6"
@@ -787,6 +791,31 @@ export default function MenuView({
                   </div>
                 </div>
               ))}
+
+              {/* ЗАХИАЛГЫН ТАЙЛБАР */}
+              <div>
+                <label className="mb-2 block text-sm font-medium text-zinc-300">
+                  Тайлбар{" "}
+                  <span className="font-normal text-zinc-500">
+                    (заавал биш)
+                  </span>
+                </label>
+
+                <textarea
+                  value={orderNote}
+                  onChange={(event) =>
+                    setOrderNote(event.target.value)
+                  }
+                  maxLength={200}
+                  rows={2}
+                  placeholder="Жишээ нь: мөсгүй, сахар бага..."
+                  className="w-full resize-none rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none placeholder:text-zinc-600 focus:border-amber-400/50"
+                />
+
+                <p className="mt-1 text-right text-xs text-zinc-600">
+                  {orderNote.length}/200
+                </p>
+              </div>
 
               {orderError && (
                 <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-400">
